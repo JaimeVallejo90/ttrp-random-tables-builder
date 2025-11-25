@@ -81,7 +81,10 @@ function renderPool() {
   dicePoolContainer.innerHTML = dicePool
     .map(
       (sides, idx) =>
-        `<button type="button" class="pool-die" data-index="${idx}"><span class="symbol remove">×</span>d${sides}</button>`
+        `<button type="button" class="pool-die" data-index="${idx}">
+          <span class="pill-icon remove" aria-hidden="true">×</span>
+          <span class="pill-label">d${sides}</span>
+        </button>`
     )
     .join("");
 }

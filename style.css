@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&display=swap");
+
 :root {
   color-scheme: light;
   --bg: #0e1116;
@@ -9,7 +11,7 @@
   --accent-2: #f87171;
   --border: #1f2937;
   --radius: 12px;
-  --font: "Inter", system-ui, -apple-system, sans-serif;
+  --font: "Manrope", "Inter", system-ui, -apple-system, sans-serif;
 }
 
 * {
@@ -153,9 +155,9 @@ button:hover {
   box-shadow: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   position: relative;
-  padding-left: 16px;
+  padding: 10px 16px 10px 28px;
   border-radius: 999px;
 }
 
@@ -184,6 +186,7 @@ button:hover {
   border-radius: 999px;
   font-weight: 700;
   box-shadow: none;
+  padding-left: 30px;
 }
 
 .pool-die:hover {
@@ -192,9 +195,13 @@ button:hover {
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
 }
 
-.symbol {
+.pill-label {
+  pointer-events: none;
+}
+
+.pill-icon {
   position: absolute;
-  left: 10px;
+  left: 12px;
   top: 50%;
   transform: translate(-4px, -50%) scale(0.95);
   opacity: 0;
@@ -202,10 +209,23 @@ button:hover {
   pointer-events: none;
 }
 
-.die-button:hover .symbol,
-.pool-die:hover .symbol {
+.pill-icon.plus {
+  color: var(--accent);
+}
+
+.pill-icon.remove {
+  color: var(--accent-2);
+}
+
+.die-button:hover .pill-icon,
+.pool-die:hover .pill-icon {
   opacity: 1;
   transform: translate(-4px, -50%) scale(1);
+}
+
+.remove {
+  color: var(--accent-2);
+  font-weight: 800;
 }
 
 .remove {
@@ -225,6 +245,7 @@ button:hover {
   gap: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 
 .rule-chips {
@@ -255,6 +276,7 @@ button:hover {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  margin-left: 4px;
 }
 
 .count-stepper button {
