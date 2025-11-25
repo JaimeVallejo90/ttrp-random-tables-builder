@@ -1,19 +1,82 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Stats de tiradas de dados</title>
+  <title>Dice Roll Probability Stats</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>Stats de tiradas de dados</h1>
+  <main class="layout">
+    <header class="hero minimal">
+      <h1>Random Table Generator</h1>
+    </header>
 
-  <textarea id="input" rows="6" placeholder="Escribe tiradas separadas por espacios o comas. Ej: 4 5 3 6 6 2 1 4"></textarea>
-  <br />
-  <button id="calc">Calcular porcentajes</button>
+    <section class="card">
+      <div class="controls single">
+        <div>
+          <p class="label centered">Add dice</p>
+          <div class="die-list centered" id="die-list">
+            <button type="button" class="die-button" data-die="4"><span class="symbol">+</span>d4</button>
+            <button type="button" class="die-button" data-die="6"><span class="symbol">+</span>d6</button>
+            <button type="button" class="die-button" data-die="8"><span class="symbol">+</span>d8</button>
+            <button type="button" class="die-button" data-die="10"><span class="symbol">+</span>d10</button>
+            <button type="button" class="die-button" data-die="12"><span class="symbol">+</span>d12</button>
+            <button type="button" class="die-button" data-die="20"><span class="symbol">+</span>d20</button>
+          </div>
+        </div>
+      </div>
 
-  <h2>Resultados</h2>
-  <div id="output"></div>
+      <div class="rule-row centered">
+        <div class="rule-chips" id="rule-chips">
+          <button type="button" data-rule="none" class="chip active">No rule</button>
+          <button type="button" data-rule="drop-low" class="chip">Drop lowest</button>
+          <button type="button" data-rule="drop-high" class="chip">Drop highest</button>
+          <button type="button" data-rule="keep-low" class="chip">Keep lowest</button>
+          <button type="button" data-rule="keep-high" class="chip">Keep highest</button>
+        </div>
+        <div class="count-stepper">
+          <button type="button" id="count-dec" aria-label="decrease count">-</button>
+          <span id="rule-count" class="count-value">1</span>
+          <button type="button" id="count-inc" aria-label="increase count">+</button>
+        </div>
+      </div>
+
+      <div class="pool centered" id="dice-pool" aria-label="Current dice pool"></div>
+    </section>
+
+    <section class="results">
+      <div id="summary" class="card summary">
+        <div>
+          <p class="label">Dice</p>
+          <p id="summary-dice" class="value">-</p>
+        </div>
+        <div>
+          <p class="label">Expected value</p>
+          <p id="summary-mean" class="value">-</p>
+        </div>
+        <div>
+          <p class="label">Range</p>
+          <p id="summary-range" class="value">-</p>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <div class="card-header">
+          <h2>Probability curve</h2>
+          <p id="chart-caption" class="muted"></p>
+        </div>
+        <div id="chart" class="chart" role="img" aria-label="Probability distribution"></div>
+      </div>
+
+      <div class="card table-card">
+        <div class="card-header">
+          <h2>Result table</h2>
+          <p class="muted">Exact probability for every possible total.</p>
+        </div>
+        <div id="table-container"></div>
+      </div>
+    </section>
+  </main>
 
   <script src="script.js"></script>
 </body>

@@ -1,6 +1,5 @@
 # Dice Stats
 
-Pequeña herramienta para agrupar resultados de tiradas de dados y calcular porcentajes.
+Small tool to calculate the exact distribution of dice rolls.
 
-Se introduce una lista de tiradas (por ejemplo resultados de 4d6 drop lowest repetidos muchas veces) y la app muestra
-la frecuencia y el porcentaje de cada valor.
+Click dice to add them to the pool (or add a custom die), and click any die in the pool to remove it. The app shows the exact frequency and percentage for every possible total, plus a chart of the resulting curve.
