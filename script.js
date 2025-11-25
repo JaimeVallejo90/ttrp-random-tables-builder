@@ -7,6 +7,7 @@ const ruleCountDec = document.getElementById("count-dec");
 const outcomesContainer = document.getElementById("outcomes-container");
 const addOutcomeButton = document.getElementById("add-outcome");
 const autoSpreadButton = document.getElementById("auto-spread");
+const coverageEl = document.getElementById("outcome-coverage");
 const summaryDice = document.getElementById("summary-dice");
 const summaryMean = document.getElementById("summary-mean");
 const summaryRange = document.getElementById("summary-range");
@@ -18,9 +19,9 @@ const dicePool = [6, 6, 6];
 let activeRule = "none";
 let activeRuleCount = 1;
 let outcomes = [
-  { label: "Outcome 1", min: null, max: null },
-  { label: "Outcome 2", min: null, max: null },
-  { label: "Outcome 3", min: null, max: null }
+  { label: "Outcome 1", min: 3, max: 6 },
+  { label: "Outcome 2", min: 7, max: 10 },
+  { label: "Outcome 3", min: 11, max: 18 }
 ];
 let lastDistribution = null;
 
@@ -340,7 +341,7 @@ function renderChart(distribution) {
   }
 
   const probabilitiesByTotal = new Map(probabilities.map(p => [p.total, p.probability]));
-  const regions = renderOutcomeRegions(probabilitiesByTotal, usableWidth, usableHeight, margin, minSum, maxSum);
+  const regions = renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, usableHeight, margin);
 
   chartContainer.innerHTML = `<svg viewBox="0 0 ${width} ${height}" aria-hidden="false">
       <defs>
@@ -390,9 +391,10 @@ function renderChart(distribution) {
   chartCaption.textContent = `${describePool(pool)}${describeRule()}: exact probability of totals (${minSum} to ${maxSum}).`;
 }
 
-function renderOutcomeRegions(probabilitiesByTotal, usableWidth, usableHeight, margin, minSum, maxSum) {
-  const ranges = getOutcomeRanges(minSum, maxSum);
+function renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, usableHeight, margin) {
+  const ranges = getOutcomeRanges(distribution);
   if (!ranges.length) return { rects: "", labels: "" };
+  const { minSum, maxSum } = getRangeBounds(distribution);
   const baselineY = margin.top + usableHeight;
   const regionHeight = usableHeight * 0.65;
   const hueStep = 360 / Math.max(ranges.length, 1);
@@ -495,6 +497,26 @@ function describeRule() {
   return label ? ` (${label})` : "";
 }
 
+function getOutcomeRanges(distribution) {
+  const { minSum, maxSum } = getRangeBounds(distribution);
+  let ranges = outcomes.map(o => {
+    const min = Number.isFinite(o.min) ? clamp(o.min, minSum, maxSum) : minSum;
+    const max = Number.isFinite(o.max) ? clamp(o.max, minSum, maxSum) : maxSum;
+    return { label: o.label, min: Math.min(min, max), max: Math.max(min, max) };
+  });
+
+  const invalid = ranges.some(r => !Number.isFinite(r.min) || !Number.isFinite(r.max) || r.min > r.max);
+  if (invalid) {
+    autoSpreadRanges(distribution);
+    ranges = outcomes.map(o => ({
+      label: o.label,
+      min: clamp(o.min, minSum, maxSum),
+      max: clamp(o.max, minSum, maxSum)
+    }));
+  }
+  return ranges;
+}
+
 function rangesValid(distribution) {
   if (!distribution) return false;
   const { minSum, maxSum } = getRangeBounds(distribution);
@@ -505,9 +527,7 @@ function rangesValid(distribution) {
 
 function autoSpreadRanges(distribution) {
   if (!distribution) return;
-  const { totals } = distribution;
-  const minSum = totals[0];
-  const maxSum = totals[totals.length - 1];
+  const { minSum, maxSum } = getRangeBounds(distribution);
   const span = maxSum - minSum + 1;
   const count = Math.max(outcomes.length, 1);
   const base = Math.floor(span / count);
@@ -527,7 +547,6 @@ function shiftRange(idx, delta) {
   const { minSum, maxSum } = getRangeBounds(lastDistribution);
   const o = outcomes[idx];
   if (!Number.isFinite(o.min) || !Number.isFinite(o.max)) return;
-  const width = o.max - o.min;
   let newMin = o.min + delta;
   let newMax = o.max + delta;
   if (newMin < minSum || newMax > maxSum) return;
@@ -545,6 +564,88 @@ function shiftRange(idx, delta) {
 function getRangeBounds(distribution) {
   const { totals } = distribution;
   return { minSum: totals[0], maxSum: totals[totals.length - 1] };
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function sumProbability(probabilitiesByTotal, min, max) {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) return 0;
+  let prob = 0;
+  for (let t = min; t <= max; t += 1) {
+    prob += probabilitiesByTotal.get(t) || 0;
+  }
+  return prob;
+}
+
+function renderDesigner(distribution) {
+  if (!distribution) {
+    outcomesContainer.innerHTML = `<p class="muted">Add dice to configure outcomes.</p>`;
+    coverageEl.textContent = "";
+    return;
+  }
+  const { minSum, maxSum } = getRangeBounds(distribution);
+  const probabilitiesByTotal = new Map(distribution.probabilities.map(p => [p.total, p.probability]));
+
+  const rows = outcomes
+    .map((o, idx) => {
+      const min = clamp(o.min, minSum, maxSum);
+      const max = clamp(o.max, minSum, maxSum);
+      const prob = sumProbability(probabilitiesByTotal, min, max);
+      const invalid = !Number.isFinite(min) || !Number.isFinite(max) || min > max;
+      return `<div class="outcome-row" data-idx="${idx}">
+        <input name="label" class="text-input" value="${escapeHtml(o.label)}" />
+        <div class="range-inputs">
+          <input name="min" type="number" value="${Number.isFinite(min) ? min : ""}" min="${minSum}" max="${maxSum}" />
+          <span class="muted">to</span>
+          <input name="max" type="number" value="${Number.isFinite(max) ? max : ""}" min="${minSum}" max="${maxSum}" />
+        </div>
+        <div class="prob">${invalid ? "-" : `${(prob * 100).toFixed(2)}%`}</div>
+        <div class="range-actions">
+          <button type="button" class="ghost compact" data-shift="${idx}" data-delta="-1">−</button>
+          <button type="button" class="ghost compact" data-shift="${idx}" data-delta="1">+</button>
+          <button type="button" class="ghost danger" data-remove="${idx}" aria-label="Remove outcome">×</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+  outcomesContainer.innerHTML = rows;
+
+  const coverage = evaluateCoverage(outcomes, distribution.totals);
+  coverageEl.textContent = coverage.message;
+}
+
+function evaluateCoverage(outcomesList, totals) {
+  const coverCount = new Map();
+  outcomesList.forEach(o => {
+    if (!Number.isFinite(o.min) || !Number.isFinite(o.max) || o.min > o.max) return;
+    for (let t = o.min; t <= o.max; t += 1) {
+      coverCount.set(t, (coverCount.get(t) || 0) + 1);
+    }
+  });
+
+  const uncovered = totals.filter(t => !coverCount.has(t));
+  const overlaps = totals.filter(t => (coverCount.get(t) || 0) > 1);
+
+  const parts = [];
+  if (uncovered.length)
+    parts.push(`Uncovered totals: ${uncovered[0]}${uncovered.length > 1 ? `…${uncovered[uncovered.length - 1]}` : ""}`);
+  if (overlaps.length)
+    parts.push(`Overlapping totals: ${overlaps[0]}${overlaps.length > 1 ? `…${overlaps[overlaps.length - 1]}` : ""}`);
+
+  return {
+    message: parts.length ? parts.join(" · ") : "All totals covered without overlaps."
+  };
+}
+
+function clamp(val, min, max) {
+  if (!Number.isFinite(val)) return val;
+  return Math.min(Math.max(val, min), max);
 }
 
 // Initial state
