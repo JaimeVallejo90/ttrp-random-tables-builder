@@ -351,9 +351,19 @@ button:hover {
 
 .outcome-row {
   display: grid;
-  grid-template-columns: 1.3fr 1.4fr 1fr auto;
-  gap: 8px;
+  grid-template-columns: auto 1.5fr 1.6fr 0.9fr auto;
+  gap: 10px;
   align-items: center;
+}
+.label-pill {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  color: var(--text);
+  min-width: 110px;
+  text-align: left;
 }
 
 .text-input,

@@ -7,6 +7,7 @@ const ruleCountDec = document.getElementById("count-dec");
 const outcomesContainer = document.getElementById("outcomes-container");
 const addOutcomeButton = document.getElementById("add-outcome");
 const autoSpreadButton = document.getElementById("auto-spread");
+const copyOutcomesButton = document.getElementById("copy-outcomes");
 const coverageEl = document.getElementById("outcome-coverage");
 const summaryDice = document.getElementById("summary-dice");
 const summaryMean = document.getElementById("summary-mean");
@@ -19,9 +20,9 @@ const dicePool = [6, 6, 6];
 let activeRule = "none";
 let activeRuleCount = 1;
 let outcomes = [
-  { label: "Outcome 1", min: 3, max: 6 },
-  { label: "Outcome 2", min: 7, max: 10 },
-  { label: "Outcome 3", min: 11, max: 18 }
+  { label: "", min: 3, max: 6 },
+  { label: "", min: 7, max: 10 },
+  { label: "", min: 11, max: 18 }
 ];
 let lastDistribution = null;
 
@@ -63,7 +64,7 @@ ruleCountDec.addEventListener("click", () => {
 });
 
 addOutcomeButton.addEventListener("click", () => {
-  outcomes.push({ label: `Outcome ${outcomes.length + 1}`, min: null, max: null });
+  outcomes.push({ label: "", min: null, max: null });
   renderDesigner(lastDistribution);
 });
 
@@ -72,6 +73,18 @@ autoSpreadButton.addEventListener("click", () => {
   autoSpreadRanges(lastDistribution);
   renderDesigner(lastDistribution);
   renderChart(lastDistribution);
+  renderTable(lastDistribution);
+});
+
+copyOutcomesButton?.addEventListener("click", () => {
+  if (!lastDistribution) return;
+  const text = buildOutcomeClipboard(lastDistribution);
+  if (!text) return;
+  navigator.clipboard
+    ?.writeText(text)
+    .catch(() => {
+      // clipboard may be blocked; ignore
+    });
 });
 
 outcomesContainer.addEventListener("input", event => {
@@ -81,7 +94,12 @@ outcomesContainer.addEventListener("input", event => {
   const field = event.target.name;
   if (field === "label") {
     outcomes[idx].label = event.target.value;
-  } else if (field === "min" || field === "max") {
+    if (lastDistribution) {
+      renderTable(lastDistribution);
+    }
+    return; // avoid re-render to keep focus while typing
+  }
+  if (field === "min" || field === "max") {
     const val = parseInt(event.target.value, 10);
     outcomes[idx][field] = Number.isFinite(val) ? val : null;
   }
@@ -386,7 +404,7 @@ function renderChart(distribution) {
           .map(
             t => `<g>
             <line x1="${t.x}" y1="${height - margin.bottom}" x2="${t.x}" y2="${height - margin.bottom + 6}" stroke="rgba(255,255,255,0.3)" />
-            <text x="${t.x}" y="${height - margin.bottom + 24}" text-anchor="middle" fill="var(--muted)" font-size="11">${t.label}</text>
+            <text x="${t.x}" y="${height - margin.bottom + 16}" text-anchor="middle" fill="var(--muted)" font-size="11">${t.label}</text>
           </g>`
           )
           .join("")}
@@ -404,57 +422,81 @@ function renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, u
   if (!ranges.length) return { rects: "", labels: "" };
   const { minSum, maxSum } = getRangeBounds(distribution);
   const baselineY = margin.top + usableHeight;
-  const regionHeight = usableHeight * 0.65;
+  const maxRegionHeight = usableHeight * 0.55;
   const hueStep = 360 / Math.max(ranges.length, 1);
+  const stepWidth = usableWidth / (maxSum - minSum || 1);
+
+  // Precompute probabilities per range to scale heights relative to the largest outcome.
+  const rangeProbs = ranges.map(range => ({
+    ...range,
+    prob: sumProbability(probabilitiesByTotal, range.min, range.max)
+  }));
+  const maxRangeProb = Math.max(...rangeProbs.map(r => r.prob), 0.0001);
 
   const rects = [];
   const labels = [];
 
-  ranges.forEach((range, idx) => {
+  rangeProbs.forEach((range, idx) => {
     if (!Number.isFinite(range.min) || !Number.isFinite(range.max) || range.min > range.max) return;
     const startX = margin.left + ((range.min - minSum) / (maxSum - minSum || 1)) * usableWidth;
-    const endX = margin.left + ((range.max - minSum) / (maxSum - minSum || 1)) * usableWidth;
+    const width = Math.max((range.max - range.min + 1) * stepWidth, 1);
+    const endLimit = margin.left + usableWidth;
+    const rectX = startX;
+    const rectW = Math.min(width, endLimit - rectX);
+    const endX = rectX + rectW;
     const hue = Math.round((idx * hueStep) % 360);
-    const prob = sumProbability(probabilitiesByTotal, range.min, range.max);
+    const heightFactor = Math.max(range.prob / maxRangeProb, 0);
+    const rectHeight = Math.max(Math.min(maxRegionHeight, maxRegionHeight * heightFactor), 12);
+    const rectY = baselineY - rectHeight;
     const centerX = (startX + endX) / 2;
-    rects.push(`<rect x="${startX}" y="${baselineY - regionHeight}" width="${Math.max(
-      endX - startX,
-      1
-    )}" height="${regionHeight}" fill="hsla(${hue}, 60%, 60%, 0.16)" stroke="hsla(${hue}, 60%, 60%, 0.4)" stroke-width="0.5" rx="6" ry="6">
-      <title>${range.label}: ${range.min}-${range.max} (${(prob * 100).toFixed(2)}%)</title>
+    const labelText = range.label && range.label.trim() ? range.label : `Outcome ${range.idx + 1}`;
+    rects.push(`<rect x="${rectX}" y="${rectY}" width="${rectW}" height="${rectHeight}" fill="hsla(${hue}, 60%, 60%, 0.16)" stroke="hsla(${hue}, 60%, 60%, 0.4)" stroke-width="0.5" rx="6" ry="6">
+      <title>${labelText}: ${range.min}-${range.max} (${(range.prob * 100).toFixed(2)}%)</title>
     </rect>`);
-    labels.push(`<text x="${centerX}" y="${baselineY - regionHeight + 18}" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700" stroke="var(--panel)" stroke-width="0.6" paint-order="stroke fill">
-      ${(prob * 100).toFixed(1)}%
+    labels.push(`<text x="${centerX}" y="${rectY + 18}" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700" stroke="var(--panel)" stroke-width="0.6" paint-order="stroke fill">
+      ${(range.prob * 100).toFixed(1)}%
     </text>`);
   });
 
   return { rects: rects.join(""), labels: labels.join("") };
 }
 
-function renderTable({ probabilities, totalOutcomes }) {
-  const rows = probabilities
-    .map(
-      p => `<tr>
-      <td>${p.total}</td>
-      <td>${p.count.toLocaleString("en-US")}</td>
-      <td>${(p.probability * 100).toFixed(3)}%</td>
-    </tr>`
-    )
+function renderTable(distribution) {
+  if (!distribution) {
+    tableContainer.innerHTML = "";
+    return;
+  }
+  const probabilitiesByTotal = new Map(distribution.probabilities.map(p => [p.total, p.probability]));
+  const ranges = getOutcomeRanges(distribution);
+  const rollLabel = `${describePool(distribution.dicePool)}${describeRule()}`.trim() || "Roll";
+
+  const rows = ranges
+    .map((r, idx) => {
+      const prob = sumProbability(probabilitiesByTotal, r.min, r.max);
+      const label = (r.label && r.label.trim()) ? r.label : `Outcome ${idx + 1}`;
+      const rangeText = r.min === r.max ? `${r.min}` : `${r.min} - ${r.max}`;
+      const approx = formatApproxFraction(prob);
+      return `<tr>
+        <td>${rangeText}</td>
+        <td>${escapeHtml(label)}</td>
+        <td>${(prob * 100).toFixed(2)}% ${approx}</td>
+      </tr>`;
+    })
     .join("");
 
   tableContainer.innerHTML = `<table>
       <thead>
         <tr>
-          <th>Total</th>
-          <th>Outcomes</th>
-          <th>Probability</th>
+          <th>${escapeHtml(rollLabel)}</th>
+          <th></th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         ${rows}
       </tbody>
       <caption class="muted" style="caption-side: bottom; padding: 8px;">
-        Total combinations: ${totalOutcomes.toLocaleString("en-US")}
+        Totals covered: ${distribution.totals[0]} - ${distribution.totals[distribution.totals.length - 1]}
       </caption>
     </table>`;
 }
@@ -486,6 +528,28 @@ function describePool(pool) {
     .sort((a, b) => Number(a[0]) - Number(b[0]))
     .map(([sides, count]) => `${count}d${sides}`)
     .join(" + ");
+}
+
+function buildOutcomeClipboard(distribution) {
+  const probabilitiesByTotal = new Map(distribution.probabilities.map(p => [p.total, p.probability]));
+  const ranges = getOutcomeRanges(distribution);
+  if (!ranges.length) return "";
+  const rollLabel = `${describePool(distribution.dicePool)}${describeRule()}`.trim() || "Roll";
+  const header = [rollLabel, "", ""];
+  const lines = ranges.map((r, idx) => {
+    const label = (r.label && r.label.trim()) ? r.label : `Outcome ${idx + 1}`;
+    const prob = sumProbability(probabilitiesByTotal, r.min, r.max);
+    const approx = formatApproxFraction(prob);
+    const rangeText = r.min === r.max ? `${r.min}` : `${r.min}-${r.max}`;
+    return [rangeText, label, `${(prob * 100).toFixed(2)}% ${approx}`].join("\t");
+  });
+  return [header.join("\t"), ...lines].join("\n");
+}
+
+function formatApproxFraction(prob) {
+  if (!Number.isFinite(prob) || prob <= 0 || prob > 1) return "";
+  const den = Math.max(1, Math.min(999, Math.round(1 / prob)));
+  return `~1/${den}`;
 }
 
 function describeRule() {
@@ -522,7 +586,7 @@ function getOutcomeRanges(distribution) {
       max: clamp(o.max, minSum, maxSum)
     }));
   }
-  return ranges;
+  return ranges.map((r, idx) => ({ ...r, idx }));
 }
 
 function rangesValid(distribution) {
@@ -535,16 +599,65 @@ function rangesValid(distribution) {
 
 function autoSpreadRanges(distribution) {
   if (!distribution) return;
+  const { totals } = distribution;
+  const count = Math.max(outcomes.length, 1);
+
+  // If we have fewer totals than outcomes, fall back to a simple even split.
+  if (totals.length <= count) {
+    const { minSum, maxSum } = getRangeBounds(distribution);
+    const span = maxSum - minSum + 1;
+    const base = Math.floor(span / count);
+    let cursor = minSum;
+    outcomes = outcomes.map((o, idx) => {
+      const extra = idx < span % count ? 1 : 0;
+      const start = cursor;
+      const end = idx === outcomes.length - 1 ? maxSum : Math.min(maxSum, cursor + base + extra - 1);
+      cursor = end + 1;
+      return { ...o, min: start, max: end };
+    });
+    return;
+  }
+
+  // Simple symmetric spread: even base widths plus remainder fanned out from the center.
   const { minSum, maxSum } = getRangeBounds(distribution);
   const span = maxSum - minSum + 1;
-  const count = Math.max(outcomes.length, 1);
   const base = Math.floor(span / count);
-  let cursor = minSum;
+  let remainder = span - base * count;
+  const lengths = Array(count).fill(base);
 
-  outcomes = outcomes.map((o, idx) => {
-    const extra = idx < span % count ? 1 : 0;
+  // Order to distribute extras from the center outward.
+  const order = [];
+  if (count % 2 === 1) {
+    const center = Math.floor(count / 2);
+    order.push(center);
+    for (let k = 1; center - k >= 0 || center + k < count; k += 1) {
+      if (center - k >= 0) order.push(center - k);
+      if (center + k < count) order.push(center + k);
+    }
+  } else {
+    const left = count / 2 - 1;
+    const right = left + 1;
+    order.push(left, right);
+    for (let k = 1; left - k >= 0 || right + k < count; k += 1) {
+      if (left - k >= 0) order.push(left - k);
+      if (right + k < count) order.push(right + k);
+    }
+  }
+
+  let idxOrder = 0;
+  while (remainder > 0) {
+    const targetIdx = order[idxOrder % order.length];
+    lengths[targetIdx] += 1;
+    remainder -= 1;
+    idxOrder += 1;
+  }
+
+  // Build ranges sequentially with the symmetric lengths.
+  let cursor = minSum;
+  outcomes = outcomes.map((o, i) => {
+    const width = lengths[i];
     const start = cursor;
-    const end = idx === outcomes.length - 1 ? maxSum : Math.min(maxSum, cursor + base + extra - 1);
+    const end = i === outcomes.length - 1 ? maxSum : Math.min(maxSum, start + width - 1);
     cursor = end + 1;
     return { ...o, min: start, max: end };
   });
@@ -566,6 +679,7 @@ function shiftRange(idx, delta) {
   outcomes[idx] = { ...o, min: newMin, max: newMax };
   renderDesigner(lastDistribution);
   renderChart(lastDistribution);
+  renderTable(lastDistribution);
 }
 
 function nudgeEdge(idx, edge, delta) {
@@ -591,6 +705,7 @@ function nudgeEdge(idx, edge, delta) {
   outcomes[idx] = { ...o, min, max };
   renderDesigner(lastDistribution);
   renderChart(lastDistribution);
+  renderTable(lastDistribution);
 }
 
 function getRangeBounds(distribution) {
@@ -631,10 +746,11 @@ function renderDesigner(distribution) {
       const prob = sumProbability(probabilitiesByTotal, min, max);
       const invalid = !Number.isFinite(min) || !Number.isFinite(max) || min > max;
       return `<div class="outcome-row" data-idx="${idx}">
-        <input name="label" class="text-input" value="${escapeHtml(o.label)}" />
+        <span class="label-pill">Outcome ${idx + 1}</span>
+        <input name="label" class="text-input" maxlength="40" value="${escapeHtml(o.label || "")}" placeholder="Name (optional)" />
         <div class="range-inputs">
           <div class="range-field">
-            <button type="button" class="ghost compact" data-edge="min" data-idx="${idx}" data-delta="-1">−</button>
+            <button type="button" class="ghost compact" data-edge="min" data-idx="${idx}" data-delta="-1">-</button>
             <input name="min" type="number" value="${Number.isFinite(min) ? min : ""}" min="${minSum}" max="${maxSum}" />
             <button type="button" class="ghost compact" data-edge="min" data-idx="${idx}" data-delta="1">+</button>
           </div>
