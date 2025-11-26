@@ -8,6 +8,7 @@ const outcomesContainer = document.getElementById("outcomes-container");
 const addOutcomeButton = document.getElementById("add-outcome");
 const autoSpreadButton = document.getElementById("auto-spread");
 const copyOutcomesButton = document.getElementById("copy-outcomes");
+const themeToggle = document.getElementById("theme-toggle");
 const coverageEl = document.getElementById("outcome-coverage");
 const summaryDice = document.getElementById("summary-dice");
 const summaryMean = document.getElementById("summary-mean");
@@ -85,6 +86,11 @@ copyOutcomesButton?.addEventListener("click", () => {
     .catch(() => {
       // clipboard may be blocked; ignore
     });
+});
+
+themeToggle?.addEventListener("click", () => {
+  const next = (document.documentElement.dataset.theme || "dark") === "dark" ? "light" : "dark";
+  applyTheme(next);
 });
 
 outcomesContainer.addEventListener("input", event => {
@@ -495,9 +501,6 @@ function renderTable(distribution) {
       <tbody>
         ${rows}
       </tbody>
-      <caption class="muted" style="caption-side: bottom; padding: 8px;">
-        Totals covered: ${distribution.totals[0]} - ${distribution.totals[distribution.totals.length - 1]}
-      </caption>
     </table>`;
 }
 
@@ -745,6 +748,7 @@ function renderDesigner(distribution) {
       const max = clamp(o.max, minSum, maxSum);
       const prob = sumProbability(probabilitiesByTotal, min, max);
       const invalid = !Number.isFinite(min) || !Number.isFinite(max) || min > max;
+      const approx = formatApproxFraction(prob);
       return `<div class="outcome-row" data-idx="${idx}">
         <span class="label-pill">Outcome ${idx + 1}</span>
         <input name="label" class="text-input" maxlength="40" value="${escapeHtml(o.label || "")}" placeholder="Name (optional)" />
@@ -761,7 +765,7 @@ function renderDesigner(distribution) {
             <button type="button" class="ghost compact" data-edge="max" data-idx="${idx}" data-delta="1">+</button>
           </div>
         </div>
-        <div class="prob">${invalid ? "-" : `${(prob * 100).toFixed(2)}%`}</div>
+        <div class="prob">${invalid ? "-" : `${(prob * 100).toFixed(2)}% ${approx}`}</div>
         <div class="range-actions">
           <button type="button" class="ghost danger" data-remove="${idx}" aria-label="Remove outcome">x</button>
         </div>
@@ -802,8 +806,20 @@ function clamp(val, min, max) {
   return Math.min(Math.max(val, min), max);
 }
 
+function applyTheme(mode) {
+  document.documentElement.dataset.theme = mode;
+  if (themeToggle) {
+    themeToggle.textContent = mode === "light" ? "Dark mode" : "Light mode";
+  }
+  try {
+    localStorage.setItem("theme", mode);
+  } catch (_) {
+    // ignore storage issues
+  }
+}
+
 // Initial state
 renderPool();
 updateRuleCount();
 calculateDistribution();
-
+applyTheme("dark");
