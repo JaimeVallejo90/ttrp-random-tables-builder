@@ -384,6 +384,18 @@ function renderChart(distribution) {
 
   const probabilitiesByTotal = new Map(probabilities.map(p => [p.total, p.probability]));
   const regions = renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, usableHeight, margin);
+  const barWidth =
+    probabilities.length > 1 ? (usableWidth / (probabilities.length - 1)) * 0.8 : Math.min(24, usableWidth);
+  const bars = probabilities
+    .map(p => {
+      const x = points.find(pt => pt.total === p.total)?.x ?? margin.left;
+      const h = (p.probability / maxProb || 0) * usableHeight;
+      const y = height - margin.bottom - h;
+      return `<rect x="${x - barWidth / 2}" y="${y}" width="${barWidth}" height="${h}" fill="rgba(96,165,250,0.12)" stroke="rgba(96,165,250,0.3)" stroke-width="0.5" rx="3" ry="3">
+        <title>Total ${p.total}: ${(p.probability * 100).toFixed(2)}%</title>
+      </rect>`;
+    })
+    .join("");
 
   chartContainer.innerHTML = `<svg viewBox="0 0 ${width} ${height}" aria-hidden="false">
       <defs>
@@ -403,6 +415,7 @@ function renderChart(distribution) {
           .join("")}
         <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="rgba(255,255,255,0.2)" />
         ${regions.rects}
+        ${bars}
         <path d="${areaD}" fill="url(#area)" />
         <path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" />
         ${points
@@ -436,13 +449,18 @@ function renderChart(distribution) {
 function renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, usableHeight, margin) {
   const ranges = getOutcomeRanges(distribution);
   if (!ranges.length) return { rects: "", labels: "" };
-  const { minSum, maxSum } = getRangeBounds(distribution);
+  const probabilities = distribution.probabilities;
+  const totalToIndex = new Map(probabilities.map((p, i) => [p.total, i]));
+  const lastIndex = Math.max(probabilities.length - 1, 1);
   const baselineY = margin.top + usableHeight;
-  const maxRegionHeight = usableHeight * 0.55;
+  const maxRegionHeight = Math.min(usableHeight * 0.55, 80);
   const hueStep = 360 / Math.max(ranges.length, 1);
-  const stepWidth = usableWidth / (maxSum - minSum + 1); // full column per integer total
 
-  // Precompute probabilities per range to scale heights relative to the largest outcome.
+  const idxToX = idx =>
+    probabilities.length === 1
+      ? margin.left + usableWidth / 2
+      : margin.left + (idx / lastIndex) * usableWidth;
+
   const rangeProbs = ranges.map(range => ({
     ...range,
     prob: sumProbability(probabilitiesByTotal, range.min, range.max)
@@ -454,23 +472,26 @@ function renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, u
 
   rangeProbs.forEach((range, idx) => {
     if (!Number.isFinite(range.min) || !Number.isFinite(range.max) || range.min > range.max) return;
-    const endLimit = margin.left + usableWidth;
-    let rectX = margin.left + (range.min - minSum) * stepWidth;
-    let rectW = (range.max - range.min + 1) * stepWidth;
-    rectW = Math.max(rectW, 1);
-    if (rectX + rectW > endLimit) rectW = endLimit - rectX;
-    if (rectW < 1) rectW = 1;
-    const endX = rectX + rectW;
-    const hue = Math.round((idx * hueStep) % 360);
-    const heightFactor = Math.max(range.prob / maxRangeProb, 0);
-    const rectHeight = Math.max(Math.min(maxRegionHeight, maxRegionHeight * heightFactor), 12);
+
+    const startIdx = totalToIndex.has(range.min) ? totalToIndex.get(range.min) : 0;
+    const endIdx = totalToIndex.has(range.max) ? totalToIndex.get(range.max) : lastIndex;
+
+    const rawStartX = idxToX(startIdx);
+    const rawEndX = idxToX(endIdx);
+    const padding = 4;
+    const rectX = Math.min(rawStartX, rawEndX) + padding;
+    const rectW = Math.max(Math.abs(rawEndX - rawStartX) - 2 * padding, 6);
+
+    const rectHeight = Math.max(Math.min(maxRegionHeight, maxRegionHeight * (range.prob / maxRangeProb)), 12);
     const rectY = baselineY - rectHeight;
     const centerX = rectX + rectW / 2;
+    const hue = Math.round((idx * hueStep) % 360);
     const labelText = range.label && range.label.trim() ? range.label : `Outcome ${range.idx + 1}`;
-    rects.push(`<rect x="${rectX}" y="${rectY}" width="${rectW}" height="${rectHeight}" fill="hsla(${hue}, 60%, 60%, 0.16)" stroke="hsla(${hue}, 60%, 60%, 0.4)" stroke-width="0.5" rx="6" ry="6">
+
+    rects.push(`<rect x="${rectX}" y="${rectY}" width="${rectW}" height="${rectHeight}" fill="hsla(${hue}, 60%, 60%, 0.35)" stroke="hsla(${hue}, 60%, 60%, 0.6)" stroke-width="0.5" rx="6" ry="6">
       <title>${labelText}: ${range.min}-${range.max} (${(range.prob * 100).toFixed(2)}%)</title>
     </rect>`);
-    labels.push(`<text x="${centerX}" y="${rectY + 18}" text-anchor="middle" fill="var(--text)" font-size="12" font-weight="700" stroke="var(--panel)" stroke-width="0.6" paint-order="stroke fill">
+    labels.push(`<text x="${centerX}" y="${rectY + 18}" text-anchor="middle" fill="var(--text)" font-size="11" stroke="var(--panel)" stroke-width="0.6" paint-order="stroke fill">
       ${(range.prob * 100).toFixed(1)}%
     </text>`);
   });
