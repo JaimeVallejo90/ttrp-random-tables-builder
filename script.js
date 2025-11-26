@@ -431,7 +431,7 @@ function renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, u
   const baselineY = margin.top + usableHeight;
   const maxRegionHeight = usableHeight * 0.55;
   const hueStep = 360 / Math.max(ranges.length, 1);
-  const stepWidth = usableWidth / (maxSum - minSum || 1);
+  const stepWidth = usableWidth / (maxSum - minSum + 1); // full column per integer total
 
   // Precompute probabilities per range to scale heights relative to the largest outcome.
   const rangeProbs = ranges.map(range => ({
@@ -445,17 +445,18 @@ function renderOutcomeRegions(distribution, probabilitiesByTotal, usableWidth, u
 
   rangeProbs.forEach((range, idx) => {
     if (!Number.isFinite(range.min) || !Number.isFinite(range.max) || range.min > range.max) return;
-    const startX = margin.left + ((range.min - minSum) / (maxSum - minSum || 1)) * usableWidth;
-    const width = Math.max((range.max - range.min + 1) * stepWidth, 1);
     const endLimit = margin.left + usableWidth;
-    const rectX = startX;
-    const rectW = Math.min(width, endLimit - rectX);
+    let rectX = margin.left + (range.min - minSum) * stepWidth;
+    let rectW = (range.max - range.min + 1) * stepWidth;
+    rectW = Math.max(rectW, 1);
+    if (rectX + rectW > endLimit) rectW = endLimit - rectX;
+    if (rectW < 1) rectW = 1;
     const endX = rectX + rectW;
     const hue = Math.round((idx * hueStep) % 360);
     const heightFactor = Math.max(range.prob / maxRangeProb, 0);
     const rectHeight = Math.max(Math.min(maxRegionHeight, maxRegionHeight * heightFactor), 12);
     const rectY = baselineY - rectHeight;
-    const centerX = (startX + endX) / 2;
+    const centerX = rectX + rectW / 2;
     const labelText = range.label && range.label.trim() ? range.label : `Outcome ${range.idx + 1}`;
     rects.push(`<rect x="${rectX}" y="${rectY}" width="${rectW}" height="${rectHeight}" fill="hsla(${hue}, 60%, 60%, 0.16)" stroke="hsla(${hue}, 60%, 60%, 0.4)" stroke-width="0.5" rx="6" ry="6">
       <title>${labelText}: ${range.min}-${range.max} (${(range.prob * 100).toFixed(2)}%)</title>
