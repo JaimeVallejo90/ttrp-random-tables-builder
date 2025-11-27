@@ -248,6 +248,24 @@ outcomesContainer.addEventListener("input", event => {
   persistState();
 });
 
+outcomesContainer.addEventListener("keydown", event => {
+  if (event.key !== "Tab") return;
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || target.getAttribute("name") !== "label") return;
+
+  const rows = Array.from(outcomesContainer.querySelectorAll('input[name="label"]'));
+  const currentIndex = rows.indexOf(target);
+  if (currentIndex === -1) return;
+
+  event.preventDefault();
+  const nextIndex = event.shiftKey ? currentIndex - 1 : currentIndex + 1;
+  const next = rows[nextIndex];
+  if (next) {
+    next.focus();
+    next.select?.();
+  }
+});
+
 outcomesContainer.addEventListener("click", event => {
   const edgeBtn = event.target.closest("[data-edge]");
   if (edgeBtn) {
