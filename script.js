@@ -526,8 +526,8 @@ function renderTable(distribution) {
       <thead>
         <tr>
           <th>${escapeHtml(rollLabel)}</th>
-          <th></th>
-          <th></th>
+          <th>Outcome</th>
+          <th>Probability</th>
         </tr>
       </thead>
       <tbody>
@@ -578,7 +578,7 @@ function buildOutcomeClipboard(distribution) {
     const rangeText = r.min === r.max ? `${r.min}` : `${r.min}-${r.max}`;
     return [rangeText, label, `${(prob * 100).toFixed(2)}% ${approx}`].join("\t");
   });
-  return [header.join("\t"), ...lines].join("\n");
+  return [[rollLabel, "Outcome", "Probability"].join("\t"), ...lines].join("\n");
 }
 
 function formatApproxFraction(prob) {
@@ -795,7 +795,7 @@ function renderDesigner(distribution) {
       const prob = sumProbability(probabilitiesByTotal, min, max);
       const invalid = !Number.isFinite(min) || !Number.isFinite(max) || min > max;
       const approx = formatApproxFraction(prob);
-      const lockLabel = o.locked ? "Unlock" : "Lock";
+      const lockLabel = o.locked ? "Locked" : "Unlocked";
       return `<div class="outcome-row" data-idx="${idx}">
         <span class="label-pill">Outcome ${idx + 1}</span>
         <input name="label" class="text-input" maxlength="40" value="${escapeHtml(o.label || "")}" placeholder="Name (optional)" />
@@ -813,7 +813,7 @@ function renderDesigner(distribution) {
           </div>
         </div>
         <div class="prob">
-          <button type="button" class="ghost lock-btn ${o.locked ? "unlock" : ""}" data-lock="${idx}" aria-label="Lock outcome">${lockLabel}</button>
+          <button type="button" class="ghost lock-btn ${o.locked ? "locked" : ""}" data-lock="${idx}" aria-label="Lock outcome">${lockLabel}</button>
           ${invalid ? "-" : `${(prob * 100).toFixed(2)}% ${approx}`}
         </div>
         <div class="range-actions">

@@ -463,7 +463,7 @@ button:active,
   color: var(--text);
 }
 
-.lock-btn.unlock {
+.lock-btn.locked {
   color: var(--accent-2);
   border-color: var(--accent-2);
 }
