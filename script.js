@@ -638,22 +638,6 @@ function autoSpreadRanges(distribution) {
   const { totals } = distribution;
   const count = Math.max(outcomes.length, 1);
 
-  // If we have fewer totals than outcomes, fall back to a simple even split.
-  if (totals.length <= count) {
-    const { minSum, maxSum } = getRangeBounds(distribution);
-    const span = maxSum - minSum + 1;
-    const base = Math.floor(span / count);
-    let cursor = minSum;
-    outcomes = outcomes.map((o, idx) => {
-      const extra = idx < span % count ? 1 : 0;
-      const start = cursor;
-      const end = idx === outcomes.length - 1 ? maxSum : Math.min(maxSum, cursor + base + extra - 1);
-      cursor = end + 1;
-      return { ...o, min: start, max: end };
-    });
-    return;
-  }
-
   const { minSum, maxSum } = getRangeBounds(distribution);
   const span = maxSum - minSum + 1;
 
@@ -666,6 +650,20 @@ function autoSpreadRanges(distribution) {
 
   // Identify locked and unlocked indices.
   const locked = clamped.map(o => Boolean(o.locked));
+
+  // If we have fewer totals than outcomes, fall back to a simple even split.
+  if (totals.length <= count && !locked.some(Boolean)) {
+    const base = Math.floor(span / count);
+    let cursor = minSum;
+    outcomes = clamped.map((o, idx) => {
+      const extra = idx < span % count ? 1 : 0;
+      const start = cursor;
+      const end = idx === outcomes.length - 1 ? maxSum : Math.min(maxSum, cursor + base + extra - 1);
+      cursor = end + 1;
+      return { ...o, min: start, max: end };
+    });
+    return;
+  }
 
   // Fill unlocked segments between locked ranges.
   let cursor = minSum;
@@ -829,25 +827,38 @@ function renderDesigner(distribution) {
 }
 
 function evaluateCoverage(outcomesList, totals) {
+  if (!totals || !totals.length) return { message: "" };
+
+  const totalValues = totals.map(Number).filter(Number.isFinite);
+  const minTotal = Math.min(...totalValues);
+  const maxTotal = Math.max(...totalValues);
+
   const coverCount = new Map();
   outcomesList.forEach(o => {
-    if (!Number.isFinite(o.min) || !Number.isFinite(o.max) || o.min > o.max) return;
-    for (let t = o.min; t <= o.max; t += 1) {
+    const rawMin = Number(o.min);
+    const rawMax = Number(o.max);
+    if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return;
+    const start = Math.max(minTotal, Math.min(rawMin, rawMax));
+    const end = Math.min(maxTotal, Math.max(rawMin, rawMax));
+    if (start > end) return;
+    for (let t = start; t <= end; t += 1) {
       coverCount.set(t, (coverCount.get(t) || 0) + 1);
     }
   });
 
-  const uncovered = totals.filter(t => !coverCount.has(t));
-  const overlaps = totals.filter(t => (coverCount.get(t) || 0) > 1);
+  const uncovered = totalValues.filter(t => !coverCount.has(t));
+  const overlaps = totalValues.filter(t => (coverCount.get(t) || 0) > 1);
 
   const parts = [];
-  if (uncovered.length)
-    parts.push(`Uncovered totals: ${uncovered[0]}${uncovered.length > 1 ? `â€¦${uncovered[uncovered.length - 1]}` : ""}`);
-  if (overlaps.length)
-    parts.push(`Overlapping totals: ${overlaps[0]}${overlaps.length > 1 ? `â€¦${overlaps[overlaps.length - 1]}` : ""}`);
+  if (uncovered.length) {
+    parts.push(`Uncovered totals: ${uncovered[0]}${uncovered.length > 1 ? `...${uncovered[uncovered.length - 1]}` : ""}`);
+  }
+  if (overlaps.length) {
+    parts.push(`Overlapping totals: ${overlaps[0]}${overlaps.length > 1 ? `...${overlaps[overlaps.length - 1]}` : ""}`);
+  }
 
   return {
-    message: parts.length ? parts.join(" Â· ") : "All totals covered without overlaps."
+    message: parts.length ? parts.join(" | ") : "All totals covered without overlaps."
   };
 }
 
